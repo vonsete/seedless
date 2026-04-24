@@ -10,3 +10,4 @@ Cargo.lock
 /tmp/
 .env
 .env.local
+claude.sh
