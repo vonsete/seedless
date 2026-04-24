@@ -1,0 +1,12 @@
+/target/
+*.swp
+*.swo
+*~
+.DS_Store
+Cargo.lock
+*.age
+*.share
+*.psbt
+/tmp/
+.env
+.env.local
