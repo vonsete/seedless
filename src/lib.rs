@@ -4,3 +4,4 @@ pub mod frost;
 pub mod bitcoin;
 pub mod state;
 pub mod hsm;
+pub mod slip39;

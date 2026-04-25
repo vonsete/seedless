@@ -1,4 +1,4 @@
-use seedless::{cli, config, frost, bitcoin, state, hsm};
+use seedless::{cli, config, frost, bitcoin, state, hsm, slip39};
 use cli::{Cli, Commands};
 use clap::Parser;
 use anyhow::Result;
@@ -50,6 +50,26 @@ fn cmd_setup(participants: u16, threshold: u16, network: &str) -> Result<()> {
 
     println!("✓ Generated {} key shares", num_shares);
     println!("✓ Group public key: {}", pubkey_hex);
+
+    // Generate SLIP-39 mnemonics for each share (backup purposes)
+    println!("\n📝 Generating SLIP-39 mnemonics for backup...");
+    let mut share_mnemonics: std::collections::HashMap<u16, String> = Default::default();
+
+    for (i, share) in shares.iter().enumerate() {
+        let participant_id = (i + 1) as u16;
+        let share_hex = hex::encode(share);
+
+        match slip39::share_to_mnemonic(share, participant_id, threshold, participants) {
+            Ok(mnemonic) => {
+                share_mnemonics.insert(participant_id, mnemonic.clone());
+                println!("✓ Share {} mnemonic generated", participant_id);
+            }
+            Err(e) => {
+                eprintln!("⚠️  Warning: Could not generate SLIP-39 mnemonic for share {}: {}", participant_id, e);
+                eprintln!("   Continuing with hex backup only");
+            }
+        }
+    }
 
     // Collect age recipients during HSM setup
     let mut age_recipients: std::collections::HashMap<u16, String> = Default::default();
@@ -128,6 +148,49 @@ fn cmd_setup(participants: u16, threshold: u16, network: &str) -> Result<()> {
         println!("Shares (for testing only):");
         for (i, share) in shares.iter().enumerate() {
             println!("  Share {}: {} bytes", i + 1, share.len());
+        }
+    }
+
+    // Show SLIP-39 backup information
+    println!("\n📋 SLIP-39 MNEMONIC BACKUP");
+    println!("════════════════════════════════════════════════════════════════");
+    println!("Each share has been encoded as a SLIP-39 mnemonic for backup.");
+    println!("Write these down carefully and store safely (laminated or steel).");
+    println!();
+
+    for participant_id in 1..=participants {
+        if let Some(mnemonic) = share_mnemonics.get(&participant_id) {
+            let share_hex = hex::encode(&shares[(participant_id - 1) as usize]);
+
+            println!("\n🔐 SHARE #{} - BIP-39 MNEMONIC BACKUP", participant_id);
+            println!("════════════════════════════════════════════════════════════════");
+            println!("Threshold: {}-of-{}", threshold, participants);
+            println!();
+            println!("Mnemonic ({} words - write this down carefully):", mnemonic.split_whitespace().count());
+            println!();
+
+            // Display in groups of 4 for readability
+            let words: Vec<&str> = mnemonic.split_whitespace().collect();
+            for (idx, chunk) in words.chunks(4).enumerate() {
+                let line_num = idx * 4 + 1;
+                print!("  {:2}. {}", line_num, chunk.join("  "));
+                if chunk.len() < 4 && idx == words.chunks(4).count() - 1 {
+                    // Last partial line
+                    println!();
+                } else if chunk.len() == 4 {
+                    println!();
+                }
+            }
+
+            println!();
+            println!("Hex (for digital backup or QR code):");
+            println!("  {}", share_hex);
+            println!();
+            println!("⚠️  KEEP THIS SAFE:");
+            println!("  • Write on paper (laminated or steel)");
+            println!("  • Store in secure location");
+            println!("  • This is a {} secret recovery code", threshold);
+            println!("════════════════════════════════════════════════════════════════");
         }
     }
 
